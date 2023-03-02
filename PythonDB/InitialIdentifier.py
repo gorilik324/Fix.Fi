@@ -46,7 +46,7 @@ def getSymbolsData(symbol):
     df['Taker buy quote asset volume'] = pd.to_numeric(df['Taker buy quote asset volume'], errors='coerce') # converting to numeric...
             
     df = df.dropna() #Dropping all rows with NAN's... As 4 days is the max amount of consecutive NAN's, we will lose 4 days at the start of every datapull. SNAPSHOT NEEDS TO BE A MINIMUM OF 96 HOURS(4 DAYS)    
-    return df
+    return df #commit
 
 # ------------ Getting 2 months of minute data for all symbols. 
 def addMovingAvCheckThresh(df, window):
