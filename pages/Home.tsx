@@ -1,6 +1,6 @@
 
 import { Button, Table } from 'react-bootstrap'
-import TradingViewChart from '../components/TradingView/TradingView'
+import TradingViewChart from '../components/TradingViewChart/TradingViewChartWrapper'
 
 //Pausing function
 export default function Home({ }) {

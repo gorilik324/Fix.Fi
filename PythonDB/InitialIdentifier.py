@@ -27,7 +27,7 @@ def getBinanceSymbols(symbol = 'BTC'):
 # ---------- Used to get a snapshot of the symbols data in 1 min time interval
 def getSymbolsData(symbol):
 
-    klines = client.get_historical_klines(symbol, Client.KLINE_INTERVAL_1MINUTE, "1 month ago UTC") # First ever pump on binance was on 06/09/2018 
+    klines = client.get_historical_klines(symbol, Client.KLINE_INTERVAL_1MINUTE, "2 month ago UTC") # First ever pump on binance was on 06/09/2018 
     df = pd.DataFrame(klines, columns = ['Open time', 'Open', 'High', 'Low', 'Close', 'Volume', 'Close Time', 'Quote asset volume', 'Number of trades', 'Taker buy base asset volume', 'Taker buy quote asset volume', 'Ignore'])
     df = df.rename(columns={'Open time': 'Open_Time', "Close": "Close_Price", "Close Time": "Close_Time", "Quote asset volume": "BTC_Volume", "Number of trades": "Trades", 'Volume': 'Asset_Volume'}) # Renaming columns...
     df.insert(0, column='Symbol', value=symbol)   # Adding symbol name to columns...
@@ -67,11 +67,14 @@ def addMovingAvCheckThresh(df, window):
 
 # Getting 2 months of minute data for all symbols. 
 dfMain = pd.DataFrame()
-for i in getBinanceSymbols():
+count = 0
+symbols = getBinanceSymbols()
+for i in symbols:
+    count+=1
+    print('=============== ' + str(count) + '/' + str(len(symbols)) + '================')
     df = addMovingAvCheckThresh(getSymbolsData(i), 5) #5 min MA
     df = df.loc[df['hasPumped'] == 1]
-    pd.concat([dfMain, df])
-    print(i)
+    dfMain = pd.concat([dfMain, df])
     print(dfMain)
-    print(df)
+dfMain.to_csv('PumpData.csv')
 
