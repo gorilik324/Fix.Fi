@@ -97,5 +97,11 @@ if __name__ == "__main__":
      futures.append(future)
   for future in futures:
      dfMain = pd.concat([dfMain, future.result()])
+   
+  dfMain['Open_Time'] = pd.to_datetime(df['Open_Time']) #Converting to datetime   
+  dfMain['Close_Time'] = pd.to_datetime(df['Close_Time']) #Converting to datetime 
+  dfMain['Close_Time'] = (dfMain['Close_Time'].view(np.int64) / int(1e6)).map(int)#Switching to epoch timestamp (switch back later...) 
+  dfMain['Open_Time'] = (dfMain['Open_Time'].view(np.int64) / int(1e6)).map(int)#Switching to epoch timestamp (switch back later...) 
+  dfMain = dfMain.drop(columns=['Unnamed: 0'])
+  dfMain.to_json('PumpData.json', orient='records')
   print(dfMain)
-  dfMain.to_csv('PumpData.csv')
