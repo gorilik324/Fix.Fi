@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { AdvancedRealTimeChart } from "react-ts-tradingview-widgets";
 
 
-export default function TradingViewChart(){
+export default function TradingViewChart({symbol}){
 
     const styles = {
         parent: {
@@ -19,12 +19,12 @@ export default function TradingViewChart(){
 
 
     return(
-        <div className="card" style={{height: '275px', borderRadius: '5px'}}>
+        <div className="card" style={{height: '275px', borderRadius: '10px'}}>
             <div className="card-title" style={{margin: '0px', textAlign: 'center'}}>
-                VIA/BTC
+                {symbol}
             </div>
             <div className="card-body">
-            <AdvancedRealTimeChart symbol="BTCUSDT" copyrightStyles={styles} style='3' hide_side_toolbar={true} hide_top_toolbar={true} hide_legend={true} autosize theme="light" ></AdvancedRealTimeChart>
+            <AdvancedRealTimeChart symbol={symbol} copyrightStyles={styles} style='3' hide_side_toolbar={true} hide_top_toolbar={true} hide_legend={true} autosize theme="light" ></AdvancedRealTimeChart>
             </div>
         </div>
     )

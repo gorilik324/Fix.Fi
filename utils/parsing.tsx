@@ -117,7 +117,7 @@ export function strTruncator(str: string){
 export function timeToWrt(time: Number, wrt:string, data: any){
     let returnedWrt
     data.forEach(obs => {
-        if(obs.TIMESTAMP == time){
+        if(obs.Close_Time == time){
             returnedWrt = obs[wrt]
         } 
     })

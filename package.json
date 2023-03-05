@@ -24,6 +24,7 @@
     "@web3-react/walletlink-connector": "^6.2.14",
     "bootstrap": "^5.1.3",
     "caniuse-lite": "^1.0.30001443",
+    "ccxt": "^2.8.80",
     "chart.js": "^3.9.1",
     "chartjs-adapter-date-fns": "^2.0.0",
     "chartjs-plugin-annotation": "^2.1.2",
