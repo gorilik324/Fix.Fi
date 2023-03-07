@@ -117,9 +117,9 @@ export default function TradingViewChartLight({ title, data, wrt }) {
 
 
           const areaSeries = chart.addAreaSeries({
-            topColor: 'rgba(1, 1, 1, 0.4)',
-            bottomColor: 'rgba(0, 0, 0, 0.0)',
-            lineColor: 'rgba(1, 1, 1, 1.0)',
+            topColor: 'rgba(255, 1, 1, 0.4)',
+            bottomColor: 'rgba(255, 0, 0, 0.0)',
+            lineColor: 'rgba(55, 1, 1, 1.0)',
             lineWidth: 3,
             priceFormat: {
               type: "price",

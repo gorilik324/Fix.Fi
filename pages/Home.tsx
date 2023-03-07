@@ -5,7 +5,9 @@ import TradingViewChartLight from '../components/TradingViewChartLight/TradingVi
 import { useEffect, useState } from 'react'
 import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
 import Popover from 'react-bootstrap/Popover';
-import { PumpData } from './api/PumpData.json'
+import { PumpData } from './api/PumpData.json';
+import { supabase } from "../utils/supabase";
+
 
 
 
@@ -42,6 +44,29 @@ export default function Home({ }) {
     getSymbolData(PumpData[0].Symbol, PumpData[0].Open_Time)
   }, [])
 
+  const [pumpData, setPumpData] = useState({})
+  async function getPumpData() {
+    //Recieving the most recent APR value we have...
+    let pumpDataRetrieved = await supabase
+      .from('Probabilities')
+      .select()
+      .order('id', { ascending: false }) //ordering from highest timestamp to smallest.
+      .limit(1) //limiting to 1 to only get one out.
+    setPumpData(pumpDataRetrieved.data[0])
+  }
+  useEffect(() => {
+    getPumpData()
+  }, [])
+
+  supabase
+    .channel('public:Probabilities')
+    .on('postgres_changes', { event: '*', schema: 'public' }, (data: any) => {
+      console.log(data.new)
+      setPumpData(data.new)
+    })
+    .subscribe()
+
+  console.log(pumpData)
 
   //Width and span of the input option for eth invested. 
   const popover = (
@@ -57,7 +82,7 @@ export default function Home({ }) {
     <>
       <div className='row'>
         <div className='col-4'>
-          <div className="container" style={{ margin: '0px', maxWidth: '100%', background: 'rgba(0,0,200,0.2)', paddingTop: '12px', borderRadius: '10px', marginBottom: '15px' }}>
+          <div className="container" style={{ margin: '0px', maxWidth: '100%', background: 'rgba(255,0,00,0.2)', paddingTop: '12px', borderRadius: '10px', marginBottom: '15px' }}>
             <h3 className="card-title" style={{ marginBottom: '15px' }}>
               Anomaly Detection
               <Button disabled variant='success' style={{ marginLeft: '10px' }}>
@@ -82,9 +107,8 @@ export default function Home({ }) {
                       <tbody>
                         {PumpData.map((row) => {
                           var date = (new Date(row.Open_Time)).toString()
-                          console.log(date)
                           return (
-                            <tr style={{cursor: 'pointer'}} onClick={() => {getSymbolData(row.Symbol, row.Open_Time)}}>
+                            <tr style={{ cursor: 'pointer' }} onClick={() => { getSymbolData(row.Symbol, row.Open_Time) }}>
                               <td>{row.Symbol.slice(0, -3)}</td>
                               <td>{date.slice(0, -34)}</td>
                               <td>{row.BTC_Volume.toFixed(3)} BTC</td>
@@ -92,7 +116,7 @@ export default function Home({ }) {
                             </tr>
                           )
                         })}
-                      </tbody>
+                      </tbody>range
                     </Table>
                   </div>
                 </div>
@@ -101,30 +125,40 @@ export default function Home({ }) {
           </div>
         </div>
         <div className='col-8'>
-          <div className="container" style={{ margin: '0px', maxWidth: '100%', background: 'rgba(250,0,0,0.2)', paddingTop: '12px', borderRadius: '10px', marginBottom: '15px' }}>
+          <div className="container" style={{ margin: '0px', maxWidth: '100%', background: 'rgba(0,0,256,0.15)', paddingTop: '12px', borderRadius: '10px', marginBottom: '15px' }}>
             <h3 className="card-title" style={{ marginBottom: '15px' }}>
-              Pump Predictor
-              <OverlayTrigger trigger="click" placement="bottom" overlay={popover}>
-                <Button style={{ padding: '0px 10px', border: '0px', marginLeft: '5px' }} variant="info">i</Button>
-              </OverlayTrigger>
-              <Button disabled variant='success' style={{ marginLeft: '10px' }}>
-                Live
-              </Button>
+              <div className='row'>
+                <div className='col-4'>
+                  Pump Predictor
+                  <OverlayTrigger trigger="click" placement="bottom" overlay={popover}>
+                    <Button style={{ padding: '0px 10px', border: '0px', marginLeft: '5px' }} variant="info">i</Button>
+                  </OverlayTrigger>
+                  <Button disabled variant='success' style={{ marginLeft: '10px' }}>
+                    Live
+                  </Button>
+                </div>
+                <div className='col-4'>
+                  <div className='card' style={{textAlign: 'center', margin: '0px'}}>
+                  <p style={{padding: '0px', margin: '0px', fontSize: '18px'}}>Time: {pumpData.Time}</p>
+
+                  </div>
+                </div>
+              </div>
             </h3>
             <div className="row">
               <div className='col-6'>
-                <TradingViewChart symbol={'BTCUSDT'} />
+                <TradingViewChart symbol={pumpData.Coin_1} confidence={pumpData.Coin_1_Prob} />
               </div>
               <div className='col-6'>
-                <TradingViewChart symbol={'BTCUSDT'} />
+                <TradingViewChart symbol={pumpData.Coin_2} confidence={pumpData.Coin_2_Prob} />
               </div>
             </div>
             <div className="row">
               <div className='col-6'>
-                <TradingViewChart symbol={'BTCUSDT'} />
+                <TradingViewChart symbol={pumpData.Coin_3} confidence={pumpData.Coin_3_Prob} />
               </div>
               <div className='col-6'>
-                <TradingViewChart symbol={'BTCUSDT'} />
+                <TradingViewChart symbol={pumpData.Coin_4} confidence={pumpData.Coin_4_Prob} />
               </div>
             </div>
           </div>
