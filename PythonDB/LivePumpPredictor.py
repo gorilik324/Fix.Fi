@@ -1,6 +1,5 @@
 
 from supabase import create_client, Client as SupaBaseClient
-import os
 from keras.utils import normalize
 from concurrent.futures import ThreadPoolExecutor
 import random
@@ -14,6 +13,9 @@ import pandas as pd
 import re  # Using RegEx to filter through the symbols.
 import schedule
 from datetime import datetime, timedelta
+import warnings
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
+from xgboost import XGBClassifier
 
 # Binance library and client (no API key required).
 from binance import Client
@@ -24,6 +26,7 @@ key: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI
 supabase: SupaBaseClient = create_client(url, key)
 
 _15minInMs = 900000
+
 
 def ceil_dt(dt, delta):
     return dt + (datetime.min - dt) % delta
@@ -62,47 +65,38 @@ def getGeneralBinanceData(lagBefore, observations, start, finish):
 
 # ---------- Used to get a snapshot of the symbols data in 1 min time interval
 
-
 def getSymbolsData(symbol, start, finish, interval='15m'):
     time.sleep(random.random() * 45)
     start = str(start)
     finish = str(finish)
 
     # First ever pump on binance was on 06/09/2018
-    klines = client.get_historical_klines(
-        ""+symbol+"", interval, start_str=start, end_str=finish)
-    df = pd.DataFrame(klines, columns=['Open time', 'Open', 'High', 'Low', 'Close', 'Volume', 'Close Time',
-                      'Quote asset volume', 'Number of trades', 'Taker buy base asset volume', 'Taker buy quote asset volume', 'Ignore'])
+    klines = client.get_historical_klines(""+symbol+"", interval, start_str=start, end_str=finish)
+    df = pd.DataFrame(klines, columns=['Open time', 'Open', 'High', 'Low', 'Close', 'Volume', 'Close Time','Quote asset volume', 'Number of trades', 'Taker buy base asset volume', 'Taker buy quote asset volume', 'Ignore'])
     df = df.drop(columns=['Ignore'])  # Dropping unneeded columns
     # Renaming columns...
-    df = df.rename(columns={'Open time': 'Open_Time', "Close": "Close_Price", "Close Time": "Close_Time",
-                   "Quote asset volume": "BTC_Volume", "Number of trades": "Trades", 'Volume': 'Asset_Volume'})
+    df = df.rename(columns={'Open time': 'Open_Time', "Close": "Close_Price", "Close Time": "Close_Time", "Quote asset volume": "BTC_Volume", "Number of trades": "Trades", 'Volume': 'Asset_Volume'})
     # Adding symbol name to columns...
     df.insert(0, column='Symbol', value=symbol)
 
     # Time related features - note we are data engineering
-    df['Open_Time'] = pd.to_datetime(
-        df['Open_Time'], origin='unix', unit='ms')  # Converting to datetime
-    df['Close_Time'] = pd.to_datetime(
-        df['Close_Time'], origin='unix', unit='ms')  # Converting to datetime
+    df['Open_Time'] = pd.to_datetime(df['Open_Time'], origin='unix', unit='ms')  # Converting to datetime
+    df['Close_Time'] = pd.to_datetime(df['Close_Time'], origin='unix', unit='ms')  # Converting to datetime
     # Converting numerical columns to numerical datatypes...
     df['Open'] = pd.to_numeric(df['Open'], errors='coerce')
-    df['High'] = pd.to_numeric(
-        df['High'], errors='coerce')  # converting to numeric
+    df['High'] = pd.to_numeric(df['High'], errors='coerce')  # converting to numeric
     # converting to numeric...
     df['Low'] = pd.to_numeric(df['Low'], errors='coerce')
     # Converting numerical columns to numerical datatypes...
     df['Close_Price'] = pd.to_numeric(df['Close_Price'], errors='coerce')
-    df['Asset_Volume'] = pd.to_numeric(
-        df['Asset_Volume'], errors='coerce')  # converting to numeric
+    df['Asset_Volume'] = pd.to_numeric(df['Asset_Volume'], errors='coerce')  # converting to numeric
     # converting to numeric...
     df['BTC_Volume'] = pd.to_numeric(df['BTC_Volume'], errors='coerce')
     # Converting numerical columns to numerical datatypes...
     df['Trades'] = pd.to_numeric(df['Trades'], errors='coerce')
-    df['Taker buy base asset volume'] = pd.to_numeric(
-        df['Taker buy base asset volume'], errors='coerce')  # converting to numeric
+    df['Taker buy base asset volume'] = pd.to_numeric(df['Taker buy base asset volume'], errors='coerce')  # converting to numeric
     df['Taker buy quote asset volume'] = pd.to_numeric(
-        df['Taker buy quote asset volume'], errors='coerce')  # converting to numeric...
+    df['Taker buy quote asset volume'], errors='coerce')  # converting to numeric...
 
     df = df.dropna()  # Dropping all rows with NAN's... As 4 days is the max amount of consecutive NAN's, we will lose 4 days at the start of every datapull. SNAPSHOT NEEDS TO BE A MINIMUM OF 96 HOURS(4 DAYS)
     return df
@@ -138,7 +132,6 @@ def addIntrinsicFeatures(lagBefore, df):
         df['Open_Time_minute'] = df['Open_Time'].dt.minute
         df['Open_Time_dayofweek'] = df['Open_Time'].dt.dayofweek
     df = df.dropna(how='any')
-    print(df)
     return df
 
 # ---------- PULLING PRESENT MARKET DATA/SOCIO-ECONOMIC DATA FROM COINMARKETCAP
@@ -168,10 +161,10 @@ def getDataCMC():
         # Sort columns by market cap.. keeping second(largest market cap of duplicate)
         dfMarketCap = dfMarketCap.sort_values("MktCapUSD")
         dfMarketCap = dfMarketCap.drop_duplicates(subset="Symbol", keep="last")
+        dfMarketCap.to_csv('CoinMarketCapData.csv')
         return (dfMarketCap)
     except (ConnectionError, Timeout, TooManyRedirects) as e:
         print(e)
-
 
 # ---------- Aggregating both as our dataset, We use multithreading here to speed up the process..
 def getAggregateData(lagBefore=192, lagAfter=0):
@@ -181,44 +174,43 @@ def getAggregateData(lagBefore=192, lagAfter=0):
     # Randomly sampled over the last 7 years (these are the timestamps) - done for each token 30 times to get a fair representation of it's market behaviour over the time.
     timeGiven = int(time.time_ns() / 1000000) - _15minInMs + 1 #Pulled back 15 mins to ensure we get ALL data
     generalDF = getGeneralBinanceData(lagBefore, 1, timeGiven, timeGiven)
-    print(generalDF)
 
     # Adding Market Cap Data
-    dfMarketCap = getDataCMC()
+    #dfMarketCap = getDataCMC() - For new data, not in use atm because of data limits...
+    dfMarketCap = pd.read_csv('CoinMarketCapData.csv', index_col=0)
     # NEEDS RE-EVALUATING, AND MERGING ON DATES TOO! - SAME CLOSE TIMES BUT WITH DIFFERENT MARKET CAPS! LOOK INTO IT.
     condensedDF = pd.merge(dfMarketCap, generalDF, on='Symbol', validate="1:m")
     return condensedDF
 
-
 def repeatedProcess():
-    try:
-        Time = str(ceil_dt(datetime.now(), timedelta(minutes=15)))
-        df = getAggregateData() #Retrieving current data
-        #df=pd.read_csv('NewData.csv', index_col=0)
-        dfSymbol = df['Symbol']  # Keeping the symbol column for after
-        df = normalize(df.drop(columns=['Close_Time', 'Symbol', 'Open_Time']), axis=1)
+    Time = str(ceil_dt(datetime.now(), timedelta(minutes=15)))
+    XGBoost = pickle.load(open("PythonDB/XGBoost.sav", "rb"))    
+    print(XGBoost)
 
-        # Importing Model That We Use
-        XGBoost = pickle.load(open("PythonDB/Models/XGBoost.sav", "rb"))
-        y_predict_proba = XGBoost.predict_proba(df)
-        probability = pd.DataFrame({"Symbol": list(dfSymbol), "Probability": list(y_predict_proba)})
-        probability['Probability'] = probability['Probability'].str[1] * 100
-        probability = probability.sort_values('Probability', ascending=False).head(4)
+    df = getAggregateData() #Retrieving current data
+    #df=pd.read_csv('NewData.csv', index_col=0)
+    dfSymbol = df['Symbol']  # Keeping the symbol column for after
+    df = normalize(df.drop(columns=['Close_Time', 'Symbol', 'Open_Time']), axis=1)
 
-        print('--------- NEW PUMP PREDICTION ---------')
-        print(Time)
-        print(probability)
+    # Importing Model That We Use
+    y_predict_proba = XGBoost.predict_proba(df)
+    probability = pd.DataFrame({"Symbol": list(dfSymbol), "Probability": list(y_predict_proba)})
+    probability['Probability'] = probability['Probability'].str[1] * 100
+    probability = probability.sort_values('Probability', ascending=False).head(4)
 
-        # Iterating over 4 most likely probabilities and sending them off to the database.
-        supabase.table('Probabilities').insert({
-            'Time': Time,
-            'Coin_1': probability.iloc[0, 0], 'Coin_1_Prob': str(probability.iloc[0, 1]),
-            'Coin_2': probability.iloc[1, 0], 'Coin_2_Prob': str(probability.iloc[1, 1]),
-            'Coin_3': probability.iloc[2, 0], 'Coin_3_Prob': str(probability.iloc[2, 1]),
-            'Coin_4': probability.iloc[3, 0], 'Coin_4_Prob': str(probability.iloc[3, 1]),
-        }).execute()
-    except:
-        print('An error occured')
+    print('--------- NEW PUMP PREDICTION ---------')
+    print(Time)
+    print(probability)
+
+    # Iterating over 4 most likely probabilities and sending them off to the database.
+    supabase.table('Probabilities').insert({
+        'Time': Time,
+        'Coin_1': probability.iloc[0, 0], 'Coin_1_Prob': str(probability.iloc[0, 1]),
+        'Coin_2': probability.iloc[1, 0], 'Coin_2_Prob': str(probability.iloc[1, 1]),
+        'Coin_3': probability.iloc[2, 0], 'Coin_3_Prob': str(probability.iloc[2, 1]),
+        'Coin_4': probability.iloc[3, 0], 'Coin_4_Prob': str(probability.iloc[3, 1]),
+    }).execute()
+
 
 if __name__ == "__main__":
 
