@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-
 from joblib.logger import PrintTime
 from matplotlib.colors import Normalize
 import numpy as np
@@ -8,7 +7,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import re #Using RegEx to filter through the symbols. 
 from sklearn import ensemble
-
 import tensorflow as tf
 from tensorflow import keras
 from keras.utils import normalize
@@ -16,12 +14,11 @@ from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import confusion_matrix
 from sklearn.ensemble import AdaBoostClassifier
-from sklearn import metrics
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import classification_report
 from sklearn.metrics import accuracy_score
-from sklearn.metrics import precision_score, recall_score
+from sklearn.metrics import precision_score, recall_score, matthews_corrcoef
 from sklearn.metrics import f1_score, roc_auc_score, roc_curve
 from imblearn.under_sampling import RandomUnderSampler
 from imblearn.over_sampling import SMOTE
@@ -33,6 +30,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.svm import SVC
 from sklearn import model_selection
 from scipy.stats import uniform, randint
+from sklearn.tree import DecisionTreeClassifier
 
 # Data Preprocessing 
 df = pd.read_csv('PythonDB/EntireData.csv', index_col=0)
@@ -45,10 +43,14 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, rando
 X_train = normalize(X_train, axis=1)
 X_test = normalize(X_test, axis=1)
 
+
+
+
 # Defining the models that I am choosing
 modelsChosen = []
 modelsChosen.append(('ANN', MLPClassifier()))
 modelsChosen.append(('RF', ensemble.RandomForestClassifier()))
+modelsChosen.append(('ADA', AdaBoostClassifier()))
 modelsChosen.append(('SVC', SVC(probability = True)))
 
 # Finding the optimal SMOTE strategy.
@@ -68,7 +70,7 @@ def findOptimalSMOTE():
     return mean #Returning the mean score
 
 # Apply SMOTE to the training data
-X_train_resampled, y_train_resampled = SMOTE(random_state=0, sampling_strategy=0.25).fit_resample(X_train, y_train)
+X_train, y_train = SMOTE(random_state=0, sampling_strategy=0.25).fit_resample(X_train, y_train)
 
 #Post-Smote Balance
 print("------------Post-Cleaned balance of Classes ----- ")
@@ -85,26 +87,42 @@ def statistics(y_test, y_predict):
     print("Recall = " ,recall_score(y_test, y_predict))
     print("Precision = ",precision_score(y_test, y_predict))
     print("F1 Score = ",f1_score(y_test, y_predict))
+    print("Matthews Coefficient = ", matthews_corrcoef(y_test, y_predict))
+
 
 def add_ROC_Thresh_To_Plot(name, y_test, y_prob):
     # ROC Curve
     fpr, tpr, thresholds = roc_curve(y_test, y_prob)
     auc = roc_auc_score(y_test, y_prob)
     plt.style.use('seaborn-whitegrid')
-    plt.subplot(1, 2, 1)  # Create a subplot
+    plt.subplot(2, 2, 1)  # Create a subplot
     plt.plot(fpr, tpr, label=f"{name} (AUC = {auc:.2f})")
     plt.xlabel("False Positive Rate", fontsize=20)
     plt.ylabel("True Positive Rate", fontsize=20)
-    plt.legend(fontsize=18)
+    plt.legend(fontsize=18, loc='lower right')
 
     # Threshold-F1 Curve
     precision, recall, thresholds = precision_recall_curve(y_test, y_prob)
     f1_score = 2 * (precision * recall) / (precision + recall)
-    plt.subplot(1, 2, 2)  # Create a subplot
+
+    plt.subplot(2, 2, 2)  # Create a subplot
+    plt.plot(thresholds, recall[:-1], label=f"Recall Score {name}")
+    plt.xlabel("Threshold", fontsize=20)
+    plt.ylabel("Precision", fontsize=20)
+    plt.legend(fontsize=18, loc='upper right')
+
+    plt.subplot(2, 2, 3)  # Create a subplot
+    plt.plot(thresholds, precision[:-1],  label=f"Precision Score {name}")
+    plt.xlabel("Threshold", fontsize=20)
+    plt.ylabel("Precision", fontsize=20)
+    plt.legend(fontsize=18, loc='lower right')
+
+    plt.subplot(2, 2, 4)  # Create a subplot
     plt.plot(thresholds, f1_score[:-1], label=f"F1 Score {name}")
     plt.xlabel("Threshold", fontsize=20)
-    plt.ylabel("Score", fontsize=20)
-    plt.legend(fontsize=18, loc='lower left')
+    plt.ylabel("F1 Score", fontsize=20)
+    plt.legend(fontsize=18, loc='upper right')
+
     plt.tight_layout() 
 
 def print_important_features(model, name, feature_names, n_features=8):
@@ -124,6 +142,12 @@ def print_important_features(model, name, feature_names, n_features=8):
 def optimisedParameterSearch():
     for name, model in modelsChosen:
         param_dist = {}
+        if name == 'ADA':
+            param_dist = {
+                'base_estimator': [DecisionTreeClassifier(max_depth=d) for d in range(1, 6)],  # Base estimator with varying max_depth
+                'n_estimators': randint(10, 200),  # Number of weak classifiers
+                'learning_rate': uniform(0.01, 2),  # Learning rate
+            }
         if name == 'ANN':
             param_dist = { 
                 'hidden_layer_sizes': randint(1, 2),
@@ -144,6 +168,12 @@ def optimisedParameterSearch():
                 'degree': [2, 3, 4],
                 'class_weight': [None, 'balanced']
             }
+        elif name == 'ADA':
+            param_dist = {
+                'base_estimator': [DecisionTreeClassifier(max_depth=d) for d in range(1, 6)],  # Base estimator with varying max_depth
+                'n_estimators': randint(10, 200),  # Number of weak classifiers
+                'learning_rate': uniform(0.01, 2),  # Learning rate
+            }
         random_search = RandomizedSearchCV(
             model,
             param_distributions=param_dist,
@@ -156,12 +186,10 @@ def optimisedParameterSearch():
         random_search.fit(X_train, y_train)
         print(random_search.best_params_)
         print(name, model)
-
 param_dist_ANN = {'activation': 'tanh', 'alpha': 0.33671252843202817, 'hidden_layer_sizes': 1, 'learning_rate': 'constant'}
 param_dist_RF = {'max_depth': 18, 'min_samples_split': 7, 'n_estimators': 219}
 param_dist_SVC = {'kernel': 'poly', 'degree': 3, 'class_weight': 'balanced', 'C': 100}
-
-
+param_dist_ADA = {'base_estimator': DecisionTreeClassifier(max_depth=4), 'learning_rate': 1.393192327265517, 'n_estimators': 199}
 
 
 
@@ -181,6 +209,8 @@ def optimisedTrainSet():
             op_model = ensemble.RandomForestClassifier(**param_dist_RF)     
         elif name == 'SVC':
             op_model =  SVC(probability = True, **param_dist_SVC)
+        elif name == 'ADA':
+            op_model =  AdaBoostClassifier(**param_dist_ADA)
         kfold = model_selection.StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
         y_pred = model_selection.cross_val_predict(op_model, X_train, y_train, cv=kfold)
         y_prob = model_selection.cross_val_predict(op_model, X_train, y_train, cv=kfold, method='predict_proba')[:, 1]
@@ -200,6 +230,8 @@ def optimisedTestSet():
             op_model = ensemble.RandomForestClassifier(**param_dist_RF)     
         elif name == 'SVC':
             op_model =  SVC(probability = True, **param_dist_SVC)
+        elif name == 'ADA':
+            op_model =  AdaBoostClassifier(**param_dist_ADA)
         op_model.fit(X_train, y_train)
         y_pred = op_model.predict(X_test)
         y_prob = op_model.predict_proba(X_test)[:, 1]
@@ -210,6 +242,4 @@ def optimisedTestSet():
         if name in ["RF"]:
                 print_important_features(op_model, name, feature_names)
     plt.show()
-
-optimisedTestSet()
-#export(RandomForest(), 'ADA')
+optimisedTrainSet()

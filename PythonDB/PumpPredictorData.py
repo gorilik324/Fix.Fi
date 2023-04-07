@@ -17,11 +17,11 @@ import json
 import time
 import random
 from concurrent.futures import ThreadPoolExecutor
+import seaborn as sns
 
 
 #Splitlist from utils
 from utils import split_list
-
 def getBinanceSymbols(symbol = 'BTC'):
     # ---------- Finding all market pairs from Binance, REGEXing them, and placing them into a list:
     symbols = []
@@ -182,7 +182,19 @@ def getAggregateData(lagBefore = 192, lagAfter = 0):
     print(condensedDF)
     condensedDF.to_csv('EntireData.csv')
 
+
+    # ---------- Aggregating both as our dataset, We use multithreading here to speed up the process..
+def DataExploration():
+    df = pd.read_csv('PythonDB/PumpData.csv', index_col=0)
+    df['Height'] = 100 * (df['High'] - df['Open']) / df['Open']
+    print(df['Height'])
+    plt.xlabel('Height', fontsize=15)
+    plt.ylabel('Density', fontsize=15)
+    sns.kdeplot(df['Height'].values, bw_adjust=1.5, clip=[0,500], shade=True, color=(0.0, 0.0, 0.0, 0.1))
+    plt.show()
+
 if __name__ == "__main__":
-    getAggregateData()
+    DataExploration()
+    #getAggregateData()
 
 
